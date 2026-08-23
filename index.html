@@ -409,6 +409,8 @@ const CSS = `
 .htbl tfoot .totalrow td { font-family:'IBM Plex Mono',monospace; font-weight:700; border-top:2px solid var(--ink); border-bottom:none; padding:9px 8px; background:#F7F9FB; text-align:right; white-space:nowrap; }
 .htbl tfoot .totalrow td:first-child { font-family:'IBM Plex Sans',sans-serif; letter-spacing:.04em; text-transform:uppercase; font-size:10.5px; color:var(--navy); text-align:left; }
 .htbl .tick { font-family:'IBM Plex Mono',monospace; font-weight:600; letter-spacing:.02em; }
+.htbl a.symlink { font-family:'IBM Plex Mono',monospace; font-weight:600; letter-spacing:.02em; color:var(--navy); text-decoration:none; border-bottom:1px dotted var(--navy-2); }
+.htbl a.symlink:hover { color:var(--brass); border-bottom-color:var(--brass); }
 .htbl .cname { color:var(--mute); font-size:10.5px; }
 .htbl .sector-tag { font-size:9px; color:var(--mute); background:#F0F3F6; border:1px solid var(--rule); padding:1px 5px; border-radius:2px; white-space:nowrap; }
 .htbl .weightbar { display:inline-block; width:36px; height:4px; background:#E4EAEF; position:relative; margin-right:5px; vertical-align:middle; }
@@ -428,6 +430,8 @@ const CSS = `
 .mover-row { display:flex; justify-content:space-between; align-items:baseline; padding:6px 0; border-bottom:1px dotted #DDE4EA; font-size:12.5px; }
 .mover-row:last-child { border-bottom:none; }
 .mover-row .t { font-family:'IBM Plex Mono',monospace; font-weight:600; }
+.mover-row a.symlink { color:var(--navy); text-decoration:none; border-bottom:1px dotted var(--navy-2); }
+.mover-row a.symlink:hover { color:var(--brass); border-bottom-color:var(--brass); }
 .mover-row .n { color:var(--mute); font-size:11px; margin-left:6px; }
 .mover-row .p { font-family:'IBM Plex Mono',monospace; font-weight:600; }
 
@@ -675,7 +679,7 @@ function MazdaDashboard() {
               <h3>Best performers</h3>
               {gainers.map((h) => (
                 <div className="mover-row" key={h.symbol}>
-                  <span><span className="t">{h.symbol}</span><span className="n">{h.name}</span></span>
+                  <span><a className="t symlink" href={`mazda-research-engine.html?ticker=${h.symbol}&name=${encodeURIComponent(h.name)}&autorun=1`} target="_blank" rel="noopener noreferrer">{h.symbol}</a><span className="n">{h.name}</span></span>
                   <span className="p up">{pct(h.gainPct)}</span>
                 </div>
               ))}
@@ -684,7 +688,7 @@ function MazdaDashboard() {
               <h3>Laggards</h3>
               {losers.map((h) => (
                 <div className="mover-row" key={h.symbol}>
-                  <span><span className="t">{h.symbol}</span><span className="n">{h.name}</span></span>
+                  <span><a className="t symlink" href={`mazda-research-engine.html?ticker=${h.symbol}&name=${encodeURIComponent(h.name)}&autorun=1`} target="_blank" rel="noopener noreferrer">{h.symbol}</a><span className="n">{h.name}</span></span>
                   <span className={"p " + (h.gainPct >= 0 ? "up" : "down")}>{pct(h.gainPct)}</span>
                 </div>
               ))}
@@ -696,6 +700,7 @@ function MazdaDashboard() {
         <div className="panel">
           <div className="panel-h">
             <h2>Holdings</h2>
+            <span className="note noprint">Click any symbol for its full research report (opens a new tab; first-time visitors enter a free Anthropic API key once)</span>
             <div className="ctrl-row noprint">
               <input className="search" placeholder="Search symbol or name…" value={query} onChange={(e) => setQuery(e.target.value)} />
               <button className={"chip" + (!sectorFilter ? " on" : "")} onClick={() => setSectorFilter(null)}>All sectors</button>
@@ -722,7 +727,9 @@ function MazdaDashboard() {
                 {filtered.map((h) => (
                   <tr key={h.symbol}>
                     <td>
-                      <span className="tick">{h.symbol}</span>
+                      <a className="tick symlink" href={`mazda-research-engine.html?ticker=${h.symbol}&name=${encodeURIComponent(h.name)}&autorun=1`} target="_blank" rel="noopener noreferrer" title={`Open full ${h.symbol} research report`}>
+                        {h.symbol}
+                      </a>
                       <div className="cname">{h.name}</div>
                     </td>
                     <td><span className="sector-tag">{h.sector}</span></td>
