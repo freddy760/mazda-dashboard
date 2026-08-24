@@ -598,9 +598,9 @@ function words(...parts) {
 let API_KEY = "";
 try { API_KEY = window.localStorage.getItem("mazda_api_key") || ""; } catch (e) {}
 
-async function askClaude(prompt, useSearch, maxTokens = 1400) {
+async function askClaude(prompt, useSearch, maxTokens = 1400, maxSearches = 3) {
   const body = { model: "claude-sonnet-4-6", max_tokens: maxTokens, messages: [{ role: "user", content: prompt }] };
-  if (useSearch) body.tools = [{ type: "web_search_20250305", name: "web_search" }];
+  if (useSearch) body.tools = [{ type: "web_search_20250305", name: "web_search", max_uses: maxSearches }];
   const headers = { "Content-Type": "application/json" };
   if (API_KEY) {
     headers["x-api-key"] = API_KEY;
@@ -650,9 +650,9 @@ function toJSON(text) {
     catch (e2) { throw new Error("Research came back unreadable. Run it again."); }
   }
 }
-async function askJSON(prompt, useSearch, maxTokens = 1400) {
-  try { return toJSON(await askClaude(prompt, useSearch, maxTokens)); }
-  catch (e) { return toJSON(await askClaude(prompt + "\n\nReturn valid JSON only. No prose, no code fences. Keep it concise enough to fit well within the token limit — do not let the response get cut off mid-array.", useSearch, maxTokens)); }
+async function askJSON(prompt, useSearch, maxTokens = 1400, maxSearches = 3) {
+  try { return toJSON(await askClaude(prompt, useSearch, maxTokens, maxSearches)); }
+  catch (e) { return toJSON(await askClaude(prompt + "\n\nReturn valid JSON only. No prose, no code fences. Keep it concise enough to fit well within the token limit — do not let the response get cut off mid-array.", useSearch, maxTokens, maxSearches)); }
 }
 
 function MazdaResearchEngine() {
@@ -694,7 +694,7 @@ function MazdaResearchEngine() {
   }, []);
 
   const done = market && quality && verdict;
-  const busy = ["market", "quality", "verdict"].includes(stage);
+  const busy = ["market", "verdict"].includes(stage);
 
   async function run() {
     if (!TICK) { setErr("Enter a ticker symbol to run research."); return; }
@@ -703,36 +703,29 @@ function MazdaResearchEngine() {
 
     try {
       setStage("market");
-      const m = await askJSON(
-        `Search the web for the most recent data on ${who}. Use company filings, investor relations, and major financial data sources. Today is ${today}.
+      const combined = await askJSON(
+        `Research ${who} today (${today}) and return one JSON object with everything below. Be efficient: use at most 3 web searches total — prefer a small number of broad queries (e.g. "${TICK} stock price target analyst rating", "${TICK} quarterly earnings key metrics") that each surface many facts at once, rather than many narrow searches. Do not search separately per analyst firm or per data point — extract whichever real details appear in your 2-3 broad searches.
 Return JSON only, this exact shape, numbers unquoted, null where genuinely unavailable:
-{"price":0,"asOf":"YYYY-MM-DD","exchange":"","sector":"","industry":"","hq":"City, ST","marketCap":"e.g. 38.4B","fairValue":0,"annualDividend":0,"divYield":0,
+{"market":{"price":0,"asOf":"YYYY-MM-DD","exchange":"","sector":"","industry":"","hq":"City, ST","marketCap":"e.g. 38.4B","fairValue":0,"annualDividend":0,"divYield":0,
 "thesis":"max 42 words, plain English, what this company is and the single reason to own or avoid it now",
 "profile":"a 3-5 sentence company profile paragraph, in the style of a professional stock review: what the company does, its main segments or products, and where it operates. Written for someone unfamiliar with the company.",
 "keyMetrics":{"week52Low":0,"week52High":0,"avgVolume":"e.g. 31-34 million shares/day","peRatio":0,"betaLow":0,"betaHigh":0,"eps":"e.g. 9.11 for Q2 2026"},
 "val":{"pe":0,"fwdPe":0,"peg":0,"evEbitda":0,"ps":0,"pb":0,"pe5yAvg":0},
 "fin":{"revGrowth":0,"epsGrowth":0,"opMargin":0,"netMargin":0,"roe":0,"roic":0,"fcf":"e.g. 1.6B","netDebtEbitda":0},
-"sources":["domain.com","domain.com","domain.com"]}
-Percentages as plain numbers (12.4 means 12.4%). fairValue is your intrinsic value estimate per share.`,
-        true, 1600
-      );
-      setMarket(m);
-
-      setStage("quality");
-      const q = await askJSON(
-        `You are an equity analyst rating ${who}. Current price ${m.price}, sector ${m.sector || "n/a"}. Search for recent filings, earnings commentary, competitive position, insider and institutional activity, and — importantly — actual current Wall Street analyst ratings and price targets from named brokerages (e.g. Morgan Stanley, Wedbush, Citi, Goldman Sachs, JPMorgan, Evercore, DZ Bank, Bank of America, or whichever firms have genuinely published recent notes on this stock). Only include real firms and real actions you find via search — never invent a firm or a rating.
-Return JSON only:
-{"scores":{"business":0,"financial":0,"growth":0,"valuation":0,"dividend":0,"management":0,"risk":0,"momentum":0,"overall":0},
-"moat":"max 10 words","peers":[{"n":"Ticker","pe":0,"note":"max 6 words"},{"n":"Ticker","pe":0,"note":"max 6 words"}],
-"risks":[{"t":"max 5 words","lv":"Low|Medium|High","n":"max 14 words"}],
+"sources":["domain.com","domain.com"]},
+"quality":{"scores":{"business":0,"financial":0,"growth":0,"valuation":0,"dividend":0,"management":0,"risk":0,"momentum":0,"overall":0},
+"moat":"max 10 words","risks":[{"t":"max 5 words","lv":"Low|Medium|High","n":"max 14 words"}],
 "catalysts":[{"h":"Near|Mid|Long","n":"max 14 words"}],
-"analyst":{"consensus":"Strong Buy|Buy|Hold|Sell|Strong Sell|no coverage found","numAnalysts":"e.g. 54 to 71","pctBuyOrHigher":0,
+"analyst":{"consensus":"Strong Buy|Buy|Hold|Sell|Strong Sell|no coverage found","numAnalysts":"e.g. 54 to 71",
 "avgTargetLow":0,"avgTargetHigh":0,"forecastLow":0,"forecastHigh":0,
-"actions":[{"firm":"real firm name","action":"e.g. Upgraded to Strong Buy, Reiterated Buy, Maintains Overweight"}],
-"pillars":[{"title":"max 6 words","explanation":"1-2 sentences in plain, simple English explaining this catalyst for a non-expert reader"}]}}
-Scores are 1-10 integers; for risk, 10 means lowest risk. Give exactly 4 risks and 3 catalysts (one per horizon). Give 3-6 real analyst actions if available (empty array if none found — do not fabricate). Give 2-4 pillars explaining the bull case in plain language. Be candid — do not inflate scores or invent coverage that doesn't exist.`,
-        true, 2400
+"actions":[{"firm":"real firm name found via search","action":"e.g. Upgraded to Strong Buy, Reiterated Buy, Maintains Overweight"}],
+"pillars":[{"title":"max 6 words","explanation":"1-2 sentences in plain, simple English explaining this catalyst for a non-expert reader"}]}}}
+Percentages as plain numbers (12.4 means 12.4%). fairValue is your intrinsic value estimate per share. Scores are 1-10 integers; for risk, 10 means lowest risk. Give exactly 4 risks and 3 catalysts (one per horizon). List only real analyst firms and actions that actually appear in your search results (empty array if none found — never invent a firm, rating, or coverage). Give 2-3 pillars explaining the bull case in plain language. Be candid — do not inflate scores.`,
+        true, 2800, 3
       );
+      const m = combined.market;
+      const q = combined.quality;
+      setMarket(m);
       setQuality(q);
 
       setStage("verdict");
@@ -800,9 +793,8 @@ conviction is 1-5. Probabilities are integers summing to 100. Give exactly 5 bul
     (quality.catalysts || []).map((c) => c.n).join(" "), verdict.fit, (verdict.bullets || []).join(" ")) : 0;
 
   const steps = [
-    { k: "market", n: "01", l: "Market & valuation" },
-    { k: "quality", n: "02", l: "Quality & risk" },
-    { k: "verdict", n: "03", l: "Committee verdict" },
+    { k: "market", n: "01", l: "Research & analysis" },
+    { k: "verdict", n: "02", l: "Committee verdict" },
   ];
   const stageIdx = steps.findIndex((s) => s.k === stage);
 
